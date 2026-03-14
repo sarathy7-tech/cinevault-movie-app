@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CineVault – Movie Search</title>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+    <div class="grain"></div>
+
+    <header>
+        <div class="logo">🎬 <span>CineVault</span></div>
+        <nav>
+            <button class="nav-btn active" data-tab="search">Search</button>
+            <button class="nav-btn" data-tab="favourites">Favourites <span id="fav-count" class="badge">0</span></button>
+        </nav>
+    </header>
+
+    <!-- SEARCH TAB -->
+    <section id="tab-search" class="tab active">
+        <div class="hero">
+            <h1>Discover<br/><em>Cinema</em></h1>
+            <p>Search thousands of movies. Save your favourites.</p>
+            <div class="search-bar">
+                <input type="text" id="search-input" placeholder="Search a movie title…" autocomplete="off" />
+                <button id="search-btn">Search</button>
+            </div>
+            <div id="search-history" class="search-history"></div>
+        </div>
+
+        <div id="results-section" class="results-section hidden">
+            <h2 id="results-title">Results</h2>
+            <div id="movie-grid" class="movie-grid"></div>
+        </div>
+    </section>
+
+    <!-- FAVOURITES TAB -->
+    <section id="tab-favourites" class="tab">
+        <div class="fav-header">
+            <h2>Your Favourites</h2>
+            <button id="clear-favs" class="clear-btn">Clear All</button>
+        </div>
+        <div id="fav-grid" class="movie-grid"></div>
+        <p id="fav-empty" class="empty-msg">No favourites yet. Search and ♥ a movie!</p>
+    </section>
+
+    <!-- MODAL -->
+    <div id="modal-overlay" class="modal-overlay hidden">
+        <div class="modal">
+            <button id="modal-close" class="modal-close">✕</button>
+            <div id="modal-content"></div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+
+</html>
