@@ -1,23 +1,8 @@
-/* ================================================================
-   CineVault – Movie Search App
-   Key JS Concepts used:
-   ✅ PROMISES  – all API calls use fetch() which returns Promises,
-                  chained with .then()/.catch() and async/await
-   ✅ CLOSURES  – createSearchHistory(), createFavourites(),
-                  createCache() — each returns functions that
-                  "close over" private state
-   ================================================================ */
-
-// ── CONFIG ──────────────────────────────────────────────────────
-// Using TMDB public demo key — replace with your own free key from
-// https://www.themoviedb.org/settings/api
-const API_KEY = '2dca580c2a14b55200e784d157207b4d';
+const API_KEY = '479c3271b2e96e297b126d7e7dca56f5';
 const BASE_URL = 'https://api.themoviedb.org/3';
 const IMG_BASE = 'https://image.tmdb.org/t/p/w500';
 
 // ── CLOSURE #1 : Search History ─────────────────────────────────
-// createSearchHistory returns functions that share a private `history`
-// array — no global variable needed.
 function createSearchHistory() {
     const history = []; // ← private state, lives in closure
 
@@ -36,7 +21,6 @@ const searchHistory = createSearchHistory();
 
 
 // ── CLOSURE #2 : Favourites Manager ─────────────────────────────
-// Private `favs` Map, exposed through add/remove/has/getAll.
 function createFavourites() {
     const favs = new Map(); // ← private state
 
@@ -75,7 +59,6 @@ const favourites = createFavourites();
 
 
 // ── CLOSURE #3 : API Response Cache ─────────────────────────────
-// Caches fetch results so the same query won't hit the network twice.
 function createCache(ttlMs = 5 * 60 * 1000) {
     const store = new Map(); // ← private cache store
 
@@ -93,24 +76,30 @@ function createCache(ttlMs = 5 * 60 * 1000) {
 const cache = createCache();
 
 
-// ── PROMISE-BASED API HELPERS ────────────────────────────────────
 
-// Fetch with cache — returns a Promise
 function fetchJSON(url) {
     if (cache.has(url)) {
-        return Promise.resolve(cache.get(url)); // resolve immediately from cache
+        return Promise.resolve(cache.get(url));
     }
-    return fetch(url) // fetch returns a Promise
+    return fetch(url)
         .then(res => {
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            return res.json(); // .json() also a Promise
+            if (!res.ok) {
+                return res.json()
+                    .then(errBody => {
+                        const msg = errBody ? errBody.status_message : `HTTP ${res.status}`;
+                        throw new Error(msg);
+                    })
+                    .catch(() => {
+                        throw new Error(`HTTP ${res.status}`);
+                    });
+            }
+            return res.json();
         })
         .then(data => {
             cache.set(url, data);
             return data;
         });
 }
-
 // Search movies – returns Promise<Array>
 function searchMovies(query) {
     const url = `${BASE_URL}/search/movie?api_key=${API_KEY}&query=${encodeURIComponent(query)}&language=en-US&page=1`;
@@ -123,6 +112,13 @@ function getMovieDetails(id) {
     return fetchJSON(url);
 }
 
+// Lightweight key check on load — calls a free, simple endpoint so we can
+// tell the user immediately (and clearly) if their API key isn't working,
+// instead of leaving them guessing why search returns nothing.
+function verifyApiKey() {
+    const url = `${BASE_URL}/movie/popular?api_key=${API_KEY}...`;
+    return fetchJSON(url).then(() => true);
+}
 
 // ── DOM ELEMENTS ─────────────────────────────────────────────────
 const searchInput = document.getElementById('search-input');
@@ -163,115 +159,130 @@ function createMovieCard(movie, staggerIndex = 0) {
     </div>
   `;
 
-  // Open detail modal on card click (uses Promise inside)
-  card.addEventListener('click', e => {
-    if (e.target.closest('.card-fav')) return; // handled below
-    openModal(movie);
-  });
+    // Open detail modal on card click (uses Promise inside)
+    card.addEventListener('click', e => {
+        if (e.target.closest('.card-fav')) return; // handled below
+        openModal(movie);
+    });
 
-  // Toggle favourite
-  card.querySelector('.card-fav').addEventListener('click', e => {
-    e.stopPropagation();
-    favourites.toggle(movie);
-    refreshFavBtn(card.querySelector('.card-fav'), movie.id);
-    updateFavCount();
-    if (document.getElementById('tab-favourites').classList.contains('active')) {
-      renderFavourites();
-    }
-  });
+    // Toggle favourite
+    card.querySelector('.card-fav').addEventListener('click', e => {
+        e.stopPropagation();
+        favourites.toggle(movie);
+        refreshFavBtn(card.querySelector('.card-fav'), movie.id);
+        updateFavCount();
+        if (document.getElementById('tab-favourites').classList.contains('active')) {
+            renderFavourites();
+        }
+    });
 
-  return card;
+    return card;
 }
 
 function refreshFavBtn(btn, movieId) {
-  const active = favourites.has(movieId);
-  btn.textContent = active ? '♥' : '♡';
-  btn.classList.toggle('active', active);
+    const active = favourites.has(movieId);
+    btn.textContent = active ? '♥' : '♡';
+    btn.classList.toggle('active', active);
 }
 
 function renderMovies(movies, container) {
-  container.innerHTML = '';
-  if (!movies.length) {
-    container.innerHTML = '<p class="empty-msg">No movies found.</p>';
-    return;
-  }
-  movies.forEach((m, i) => container.appendChild(createMovieCard(m, i)));
+    container.innerHTML = '';
+    if (!movies.length) {
+        container.innerHTML = '<p class="empty-msg">No movies found.</p>';
+        return;
+    }
+    movies.forEach((m, i) => container.appendChild(createMovieCard(m, i)));
 }
 
 function showSpinner(container) {
-  container.innerHTML = `<div class="spinner-wrap"><div class="spinner"></div></div>`;
+    container.innerHTML = `<div class="spinner-wrap"><div class="spinner"></div></div>`;
+}
+
+// FIX: shows the *real* TMDB error (e.g. "Invalid API key: You must be
+// granted a valid key.") plus a direct hint, instead of a bare HTTP code.
+function showFetchError(container, message) {
+    container.innerHTML = `
+      <p class="empty-msg" style="color:#e05252; line-height:1.7;">
+        ⚠ ${message}<br/>
+        <span style="font-size:.85rem; color:#7a7a90;">
+          Tip: open <strong>app.js</strong> and replace <code>API_KEY</code>
+          with your own free key from
+          <a href="https://www.themoviedb.org/settings/api" target="_blank" style="color:#c9a84c;">themoviedb.org/settings/api</a>.
+        </span>
+      </p>`;
 }
 
 function renderHistory() {
-  historyEl.innerHTML = '';
-  searchHistory.get().forEach(q => {
-    const chip = document.createElement('button');
-    chip.className = 'history-chip';
-    chip.textContent = q;
-    chip.addEventListener('click', () => {
-      searchInput.value = q;
-      doSearch(q);
+    historyEl.innerHTML = '';
+    searchHistory.get().forEach(q => {
+        const chip = document.createElement('button');
+        chip.className = 'history-chip';
+        chip.textContent = q;
+        chip.addEventListener('click', () => {
+            searchInput.value = q;
+            doSearch(q);
+        });
+        historyEl.appendChild(chip);
     });
-    historyEl.appendChild(chip);
-  });
 }
 
 function renderFavourites() {
-  const all = favourites.getAll();
-  favEmpty.classList.toggle('hidden', all.length > 0);
-  renderMovies(all, favGrid);
+    const all = favourites.getAll();
+    favEmpty.classList.toggle('hidden', all.length > 0);
+    renderMovies(all, favGrid);
 }
 
 function updateFavCount() {
-  const n = favourites.count();
-  favCount.textContent = n;
+    const n = favourites.count();
+    favCount.textContent = n;
 }
 
 
 // ── SEARCH FLOW (uses Promise chain) ────────────────────────────
 
 function doSearch(query) {
-  const q = query.trim();
-  if (!q) return;
+    const q = query.trim();
+    if (!q) return;
 
-  searchHistory.add(q);
-  renderHistory();
-  resultsTitle.textContent = `Results for "${q}"`;
-  resultsSection.classList.remove('hidden');
-  showSpinner(movieGrid);
+    searchHistory.add(q);
+    renderHistory();
+    resultsTitle.textContent = `Results for "${q}"`;
+    resultsSection.classList.remove('hidden');
+    showSpinner(movieGrid);
 
-  // Promise chain: search → render
-  searchMovies(q)
-    .then(movies => {
-      renderMovies(movies, movieGrid);
-    })
-    .catch(err => {
-      movieGrid.innerHTML = `<p class="empty-msg">Error: ${err.message}</p>`;
-    });
+    // Promise chain: search → render
+    searchMovies(q)
+        .then(movies => {
+            renderMovies(movies, movieGrid);
+        })
+        .catch(err => {
+            // FIX: surfaces the real TMDB error message + a fix tip
+            showFetchError(movieGrid, err.message);
+        });
 }
 
 searchBtn.addEventListener('click', () => doSearch(searchInput.value));
 searchInput.addEventListener('keydown', e => {
-  if (e.key === 'Enter') doSearch(searchInput.value);
+    if (e.key === 'Enter') doSearch(searchInput.value);
 });
 
 
 // ── MODAL (uses async/await over a Promise) ──────────────────────
 
 async function openModal(movie) {
-  modalOverlay.classList.remove('hidden');
-  modalContent.innerHTML = `<div class="spinner-wrap"><div class="spinner"></div></div>`;
+    modalOverlay.classList.remove('hidden');
+    modalContent.innerHTML = `<div class="spinner-wrap"><div class="spinner"></div></div>`;
 
-  try {
-    // getMovieDetails returns a Promise; await unwraps it
-    const details = await getMovieDetails(movie.id);
-    const isFav   = favourites.has(details.id);
-    const year    = details.release_date?.slice(0, 4) || 'N/A';
-    const runtime = details.runtime ? `${details.runtime} min` : '';
-    const rating  = details.vote_average ? details.vote_average.toFixed(1) : 'N/A';
-    const genres  = (details.genres || []).map(g => g.name).join(', ');
+    try {
+        // getMovieDetails returns a Promise; await unwraps it
+        const details = await getMovieDetails(movie.id);
+        const isFav   = favourites.has(details.id);
+        const year    = details.release_date?.slice(0, 4) || 'N/A';
+        const runtime = details.runtime ? `${details.runtime} min` : '';
+        const rating  = details.vote_average ? details.vote_average.toFixed(1) : 'N/A';
+        const genres  = (details.genres || []).map(g => g.name).join(', ');
 
-    modalContent.innerHTML = `
+        modalContent.innerHTML = `
       <div class="modal-inner">
         ${details.poster_path
           ? `<img class="modal-poster" src="${IMG_BASE}${details.poster_path}" alt="${details.title}"/>`
@@ -288,48 +299,56 @@ async function openModal(movie) {
       </div>
     `;
 
-    modalContent.querySelector('.modal-fav-btn').addEventListener('click', function() {
-      favourites.toggle(details);
-      const nowFav = favourites.has(details.id);
-      this.textContent = nowFav ? '♥ Remove from Favourites' : '♡ Add to Favourites';
-      this.classList.toggle('active', nowFav);
-      updateFavCount();
-      renderFavourites();
-    });
+        modalContent.querySelector('.modal-fav-btn').addEventListener('click', function() {
+            favourites.toggle(details);
+            const nowFav = favourites.has(details.id);
+            this.textContent = nowFav ? '♥ Remove from Favourites' : '♡ Add to Favourites';
+            this.classList.toggle('active', nowFav);
+            updateFavCount();
+            renderFavourites();
+        });
 
-  } catch(err) {
-    modalContent.innerHTML = `<p class="empty-msg">Could not load details.</p>`;
-  }
+    } catch(err) {
+        // FIX: shows the actual error instead of a generic message
+        modalContent.innerHTML = `<p class="empty-msg" style="color:#e05252;">⚠ Could not load details: ${err.message}</p>`;
+    }
 }
 
 modalClose.addEventListener('click', () => modalOverlay.classList.add('hidden'));
 modalOverlay.addEventListener('click', e => {
-  if (e.target === modalOverlay) modalOverlay.classList.add('hidden');
+    if (e.target === modalOverlay) modalOverlay.classList.add('hidden');
 });
 
 
 // ── TAB NAVIGATION ───────────────────────────────────────────────
 
 navBtns.forEach(btn => {
-  btn.addEventListener('click', () => {
-    navBtns.forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    document.getElementById(`tab-${btn.dataset.tab}`).classList.add('active');
-    if (btn.dataset.tab === 'favourites') renderFavourites();
-  });
+    btn.addEventListener('click', () => {
+        navBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.getElementById(`tab-${btn.dataset.tab}`).classList.add('active');
+        if (btn.dataset.tab === 'favourites') renderFavourites();
+    });
 });
 
 
 // ── CLEAR FAVOURITES ─────────────────────────────────────────────
 
 clearFavsBtn.addEventListener('click', () => {
-  favourites.getAll().forEach(m => favourites.remove(m.id));
-  updateFavCount();
-  renderFavourites();
+    favourites.getAll().forEach(m => favourites.remove(m.id));
+    updateFavCount();
+    renderFavourites();
 });
 
 
 // ── INIT ─────────────────────────────────────────────────────────
 updateFavCount();
 renderHistory();
+
+
+verifyApiKey().catch(err => {
+    resultsSection.classList.remove('hidden');
+    resultsTitle.textContent = 'API Key Problem';
+    showFetchError(movieGrid, err.message);
+});
