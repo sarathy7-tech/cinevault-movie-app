@@ -8,10 +8,8 @@ A cinematic, dark-themed movie search app built with pure **HTML, CSS, and JavaS
 
 ## 📸 Preview
 
-> *(Add a screenshot or GIF of the app here — drop it in a `screenshots/` folder and reference it like below)*
-
 ```md
-![CineVault Demo](screenshots/demo.gif)
+![Demo](demo.png)
 ```
 
 ---
